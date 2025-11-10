@@ -1,0 +1,55 @@
+.container {
+  /* width: 100vw; */
+  color: #efeff0;
+  overflow: hidden;
+  font-size: 2.5rem;
+  /* letter-spacing: 4px; */
+  white-space: nowrap;
+}
+
+.container div {
+  height: 100%;
+  font-family: var(--app-secondary-font);
+  white-space: nowrap;
+  animation: scrolling 10s linear infinite;
+  animation-delay: 1s;
+}
+
+@media screen and (min-width: 768px) {
+  .container {
+    font-size: 6.5rem;
+  }
+  .container div {
+    animation: scrolling 15s linear infinite;
+    animation-delay: 1s;
+  }
+}
+
+@media screen and (min-width: 992px) {
+  .container {
+    font-size: 9.5rem;
+  }
+}
+
+@media screen and (min-width: 1024px) {
+  .container div {
+    animation: scrolling 15s linear infinite;
+    animation-delay: 1s;
+  }
+}
+
+@media screen and (min-width: 1200px) {
+  .container {
+    font-size: 12.5rem;
+  }
+}
+
+@keyframes scrolling {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
+}
