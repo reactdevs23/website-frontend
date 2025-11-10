@@ -7,13 +7,11 @@ import {
   Ticket,
 } from "../../../assets/images";
 import { useFormik } from "formik";
-import { useFlutterwave, closePaymentModal } from "flutterwave-react-v3";
 
 import {
   BDCFormModal,
   Button,
   FancyCheckbox,
-  Footer,
   ImageCard,
   Input,
 } from "../../../components";
@@ -64,51 +62,35 @@ const initialValues = {
 
 export default function BDC2022() {
   const [isMobileFormOpen, setIsMobileFormOpen] = useState(false);
+  const [txRef, setTxRef] = useState("");
+
   const formik = useFormik({
     initialValues,
     validationSchema,
     onSubmit: handleSubmit,
   });
+
   const nairaPrice = formik.values["ticket"] === "VIP (N5,000)" ? 5000 : 1000;
-  const [txRef, setTxRef] = useState("");
 
-  const config = {
-    public_key: process.env.NEXT_PUBLIC_FLW_PUBLIC_KEY || "",
-    tx_ref: txRef,
-    amount: nairaPrice,
-    currency: "NGN",
-    payment_options: "card,mobilemoney,ussd",
-    customizations: {
-      title: "Blockchain Tech Conference 2022",
-      description: `Payment for ${formik.values["ticket"]}`,
-      logo: "https://res.cloudinary.com/blockchainhub-africa/image/upload/v1667651791/blockchainhubafrica/logo_phap95.svg",
-    },
-  };
-
-  const handleFlutterPayment = useFlutterwave({
-    ...config,
-    customer: {
-      email: formik.values.email,
-      phone_number: formik.values.phone,
-      name: formik.values.name,
-    },
-  });
   async function handleSubmit(values: ValuesType) {
     const toastId = toast.loading("Registering User...");
     const payload = { ...values };
     try {
       if (!payload.couponCode) delete payload.couponCode;
+
       const registration = await CreateEventRegistrationAPI({
         ...payload,
         eventCode: "BDC-2022",
         ticket: formik.values["ticket"].split(" ")[0],
       });
-      const validCoupon = registration.data.data.transaction.hasPaid;
-      if (validCoupon) {
+
+      const hasPaid = registration.data.data.transaction.hasPaid;
+      if (hasPaid) {
         toast.dismiss(toastId);
         action.success(registrationSuccessModalContent);
         return;
       }
+
       const paymentId = registration.data.data.transaction.paymentId;
       setTxRef(paymentId);
       toast.dismiss(toastId);
@@ -124,20 +106,46 @@ export default function BDC2022() {
     }
   }
 
+  // Trigger Flutterwave payment when txRef changes
   useEffect(() => {
     if (!txRef) return;
-    handleFlutterPayment({
-      callback: (response) => {
-        action.success(registrationSuccessModalContent);
-        setIsMobileFormOpen(false);
-        closePaymentModal(); // this will close the modal programmatically
+
+    const publicKey = process.env.NEXT_PUBLIC_FLW_PUBLIC_KEY || "";
+    const config = {
+      public_key: publicKey,
+      tx_ref: txRef,
+      amount: nairaPrice,
+      currency: "NGN",
+      payment_options: "card,mobilemoney,ussd",
+      customer: {
+        email: formik.values.email,
+        phone_number: formik.values.phone,
+        name: formik.values.name,
       },
-      onClose: () => {
+      customizations: {
+        title: "Blockchain Tech Conference 2022",
+        description: `Payment for ${formik.values["ticket"]}`,
+        logo: "https://res.cloudinary.com/blockchainhub-africa/image/upload/v1667651791/blockchainhubafrica/logo_phap95.svg",
+      },
+      callback: function (response: any) {
+        if (response.status === "successful") {
+          action.success(registrationSuccessModalContent);
+        } else {
+          action.warning(paymentFailModalContent);
+        }
         setIsMobileFormOpen(false);
-        closePaymentModal(); // this will close the modal programmatically
+      },
+      onclose: function () {
         action.warning(paymentFailModalContent);
+        setIsMobileFormOpen(false);
       },
-    });
+    };
+
+    if (typeof window !== "undefined" && (window as any).FlutterwaveCheckout) {
+      (window as any).FlutterwaveCheckout(config);
+    } else {
+      console.error("Flutterwave script not loaded");
+    }
   }, [txRef]);
 
   return (
@@ -157,6 +165,7 @@ export default function BDC2022() {
         >
           <div className="container">
             <div className="py-12 md:py-20 lg:py-24 xl:grid xl:grid-cols-7 items-center place-items-center gap-x-8">
+              {/* Left side: info */}
               <div className="xl:col-span-4">
                 <h1
                   className={`${styles["header"]} text-3xl md:text-4xl lg:5xl mb-2`}
@@ -173,24 +182,18 @@ export default function BDC2022() {
                 </p>
                 <hr className={`${styles["bottom-bar"]} my-8`} />
                 <div className="flex gap-x-4 items-center mb-5">
-                  <span>
-                    <Calendar2 />
-                  </span>
+                  <Calendar2 />
                   <span className="text-2xl">
                     9AM, 2nd - 3rd December, 2022
                   </span>
                 </div>
                 <div className="flex gap-x-4 items-center mb-5">
-                  <span>
-                    <Calendar2 />
-                  </span>
+                  <Calendar2 />
                   <span className="text-2xl">
                     The Base Landmarks, independence layout Enugu.
                   </span>
                 </div>
-
                 <hr className={`${styles["bottom-bar"]} my-8`} />
-
                 <div
                   className={`my-8 xl:hidden ${styles["registration-form-btn"]}`}
                 >
@@ -216,18 +219,14 @@ export default function BDC2022() {
                 <div className="flex justify-center lg:justify-start">
                   <div className="w-75 lg:w-100">
                     <div className="flex gap-x-4 items-center mb-3">
-                      <span>
-                        <Ticket />
-                      </span>
+                      <Ticket />
                       <div>
                         <span className="text-2xl font-medium">VIP - </span>
                         <span className="text-2xl">$5 (N5,000)</span>
                       </div>
                     </div>
                     <div className="flex gap-x-4 items-center">
-                      <span>
-                        <Ticket />
-                      </span>
+                      <Ticket />
                       <div>
                         <span className="text-2xl font-medium">Regular - </span>
                         <span className="text-2xl">FREE</span>
@@ -236,67 +235,57 @@ export default function BDC2022() {
                   </div>
                 </div>
               </div>
+
+              {/* Right side: form */}
               <div className={`hidden xl:block xl:col-span-3 ml-auto`}>
                 <form onSubmit={formik.handleSubmit} className="py-8 px-8">
-                  <div className="flex justify-between items-center">
-                    <h3 className={`${styles["spaced-heading"]} text-3xl mb-8`}>
-                      Registration Form
-                    </h3>
-                  </div>
-                  <div>
-                    <Input
-                      name="name"
-                      formik={formik}
-                      label="Name"
-                      className={`mb-4`}
+                  <h3 className={`${styles["spaced-heading"]} text-3xl mb-8`}>
+                    Registration Form
+                  </h3>
+                  <Input
+                    name="name"
+                    formik={formik}
+                    label="Name"
+                    className="mb-4"
+                  />
+                  <Input
+                    name="email"
+                    formik={formik}
+                    label="Email"
+                    className="mb-4"
+                  />
+                  <Input
+                    name="phone"
+                    formik={formik}
+                    label="Phone No."
+                    className="mb-4"
+                  />
+                  <Input
+                    name="couponCode"
+                    formik={formik}
+                    label="Coupon Code"
+                    className="mb-10"
+                  />
+                  <p className={`${styles["ticket-label"]} mb-5`}>
+                    Ticket type
+                  </p>
+                  <div className="flex flex-wrap gap-10 justify-between">
+                    <FancyCheckbox
+                      className="text-black"
+                      value="Regular (FREE)"
+                      selectedValue={formik.values["ticket"]}
+                      onSelect={(value) =>
+                        formik.setFieldValue("ticket", value)
+                      }
                     />
-                  </div>
-                  <div>
-                    <Input
-                      name="email"
-                      formik={formik}
-                      label="Email"
-                      className={`mb-4`}
+                    <FancyCheckbox
+                      className="text-black"
+                      value="VIP (N5,000)"
+                      selectedValue={formik.values["ticket"]}
+                      onSelect={(value) =>
+                        formik.setFieldValue("ticket", value)
+                      }
                     />
-                  </div>
-                  <div>
-                    <Input
-                      name="phone"
-                      formik={formik}
-                      label="Phone No."
-                      className={`mb-4`}
-                    />
-                  </div>
-                  <div>
-                    <Input
-                      name="couponCode"
-                      formik={formik}
-                      label="Coupon Code"
-                      className={`mb-10`}
-                    />
-                  </div>
-                  <div>
-                    <p className={`${styles["ticket-label"]} mb-5`}>
-                      Ticket type
-                    </p>
-                    <div className="flex flex-wrap gap-10 justify-between ">
-                      <FancyCheckbox
-                        className="text-black"
-                        value="Regular (FREE)"
-                        selectedValue={formik.values["ticket"]}
-                        onSelect={(value) =>
-                          formik.setFieldValue("ticket", value)
-                        }
-                      />
-                      <FancyCheckbox
-                        className="text-black"
-                        value="VIP (N5,000)"
-                        selectedValue={formik.values["ticket"]}
-                        onSelect={(value) =>
-                          formik.setFieldValue("ticket", value)
-                        }
-                      />
-                    </div>
                   </div>
                   <div
                     className="mt-16"
@@ -314,53 +303,48 @@ export default function BDC2022() {
             </div>
           </div>
         </section>
-        <section className={`${styles["speakers-gallery"]} `}>
+
+        {/* Speakers Section */}
+        <section className={`${styles["speakers-gallery"]}`}>
           <div className={`${styles["conference-speakers"]} container`}>
-            <div>
-              <h2
-                className={`${styles["orange-heading"]} text-base text-orange uppercase`}
-              >
-                Conference Speakers
-              </h2>
-              <h3 className="mt-2 text-3xl md:text-5xl font-coolvetica text-white w-full md:w-1/2 lg:w-1/3">
-                Meet our Speakers
-              </h3>
-            </div>
-            <div className=" mt-10 md:mt-14 xl:mt-20 grid grid-cols-2 md:grid-cols-3 gap-6 md:gap-8 lg:gap-10 gap-y-10 md:gap-y-14 lg:gap-y-20 xl:gap-y-24">
-              {BDC2022ConferenceSpeakers.map((member, index) => {
-                return (
-                  <ImageCard
-                    key={member.name + index}
-                    name={member.name}
-                    image={member.image}
-                    title={member.title}
-                  />
-                );
-              })}
+            <h2
+              className={`${styles["orange-heading"]} text-base text-orange uppercase`}
+            >
+              Conference Speakers
+            </h2>
+            <h3 className="mt-2 text-3xl md:text-5xl font-coolvetica text-white w-full md:w-1/2 lg:w-1/3">
+              Meet our Speakers
+            </h3>
+            <div className="mt-10 md:mt-14 xl:mt-20 grid grid-cols-2 md:grid-cols-3 gap-6 md:gap-8 lg:gap-10 gap-y-10 md:gap-y-14 lg:gap-y-20 xl:gap-y-24">
+              {BDC2022ConferenceSpeakers.map((member, index) => (
+                <ImageCard
+                  key={member.name + index}
+                  name={member.name}
+                  image={member.image}
+                  title={member.title}
+                />
+              ))}
             </div>
           </div>
+
           <div className={`${styles["workshop-speakers"]} container`}>
-            <div>
-              <h2
-                className={`${styles["orange-heading"]} text-base text-orange uppercase`}
-              >
-                Workshop Instructors
-              </h2>
-              <h3 className="mt-2 text-3xl md:text-5xl font-coolvetica text-white w-full md:w-1/2 lg:w-1/3">
-                Meet our Instructors
-              </h3>
-            </div>
-            <div className=" mt-10 md:mt-14 xl:mt-20 grid grid-cols-2 md:grid-cols-3 gap-6 md:gap-8 lg:gap-10 gap-y-10 md:gap-y-14 lg:gap-y-20 xl:gap-y-24">
-              {BDC2022WorkshopSpeakers.map((member, index) => {
-                return (
-                  <ImageCard
-                    key={member.name + index}
-                    name={member.name}
-                    image={member.image}
-                    title={member.title}
-                  />
-                );
-              })}
+            <h2
+              className={`${styles["orange-heading"]} text-base text-orange uppercase`}
+            >
+              Workshop Instructors
+            </h2>
+            <h3 className="mt-2 text-3xl md:text-5xl font-coolvetica text-white w-full md:w-1/2 lg:w-1/3">
+              Meet our Instructors
+            </h3>
+            <div className="mt-10 md:mt-14 xl:mt-20 grid grid-cols-2 md:grid-cols-3 gap-6 md:gap-8 lg:gap-10 gap-y-10 md:gap-y-14 lg:gap-y-20 xl:gap-y-24">
+              {BDC2022WorkshopSpeakers.map((member, index) => (
+                <ImageCard
+                  key={member.name + index}
+                  name={member.name}
+                  image={member.image}
+                  title={member.title}
+                />
+              ))}
             </div>
           </div>
         </section>
